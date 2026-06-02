@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, 
   Users, 
@@ -23,7 +23,10 @@ import {
   Info,
   Settings,
   X,
-  CreditCard
+  CreditCard,
+  MessageSquare,
+  Send,
+  Sparkles
 } from 'lucide-react';
 import { db, Borrower, Loan, PaymentByInstallment, SQL_SCHEMA } from './db.ts';
 
@@ -45,6 +48,102 @@ export default function App() {
   // Search & Filters state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'overdue'>('all');
+
+  // Groq AI Chat Bot States
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([
+    { role: 'assistant', content: 'Olá! Sou seu Assistente de IA do GestãoCred. Estou conectado à API do Groq usando o mais novo modelo Llama 3! Como posso ajudar você hoje com seus contratos de empréstimo, devedores ou cálculos de amortização?' }
+  ]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isChatOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, isChatOpen]);
+
+  const handleSendChatMessage = async (e?: React.FormEvent, customText?: string) => {
+    if (e) e.preventDefault();
+    const textToSend = customText || chatInput;
+    if (!textToSend.trim() || isChatLoading) return;
+
+    const query = textToSend.trim();
+    if (!customText) {
+      setChatInput('');
+    }
+    setChatError(null);
+
+    const updatedMessages = [...chatMessages, { role: 'user' as const, content: query }];
+    setChatMessages(updatedMessages);
+    setIsChatLoading(true);
+
+    try {
+      // Agrupar dados reais para injetar no Groq
+      const contextData = {
+        borrowers: borrowers.map(b => ({
+          id: b.id,
+          name: b.name,
+          document: b.document,
+          phone: b.phone,
+          email: b.email
+        })),
+        loans: loans.map(l => ({
+          borrower_id: l.borrower_id,
+          amount: l.amount,
+          interest_rate: l.interest_rate,
+          interest_type: l.interest_type,
+          installments_count: l.installments_count,
+          payment_frequency: l.payment_frequency,
+          start_date: l.start_date,
+          status: l.status
+        })),
+        summary: {
+          totalAmountEmployed: metrics.totalLent,
+          totalPaidReceived: metrics.totalCollected,
+          totalOutstandingFuture: metrics.totalOutstanding,
+          totalOverdueValue: metrics.totalOverdue,
+          overdueRatePercent: metrics.totalLent > 0 ? (metrics.totalOverdue / metrics.totalLent) * 100 : 0
+        }
+      };
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+          contextData
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao obter resposta do assistente.');
+      }
+
+      const data = await response.json();
+      const botResponse = data.choices?.[0]?.message?.content || 'Não entendi seu pedido, poderia reformular?';
+      
+      setChatMessages(prev => [...prev, { role: 'assistant', content: botResponse }]);
+    } catch (err: any) {
+      console.error("Chat error:", err);
+      setChatError(err.message || 'Houve uma falha na conexão com o assistente inteligente.');
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
+  const handleClearHistory = () => {
+    setChatMessages([
+      { role: 'assistant', content: 'Conversa reiniciada! Como posso ajudar você agora?' }
+    ]);
+    setChatError(null);
+  };
 
   // Input States (Pristine clean states - no template boilerplate model data populated)
   const [showAddBorrower, setShowAddBorrower] = useState(false);
@@ -1622,6 +1721,158 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* FLOATING IA CO-PILOT BOT (GROQ) */}
+      <div className="fixed bottom-6 right-6 z-50 font-sans animate-fade-in" id="groq_ai_assistant_container">
+        {/* Chat window */}
+        {isChatOpen && (
+          <div className="absolute bottom-16 right-0 w-96 max-w-[calc(100vw-2rem)] h-[520px] max-h-[75vh] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden" id="groq_chat_window">
+            {/* Header */}
+            <div className="bg-slate-900 text-white p-4 flex justify-between items-center border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-inner">
+                    <Sparkles size={16} className="animate-pulse" />
+                  </div>
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-xs">Assistente GestãoCred</h4>
+                  <span className="text-[10px] text-slate-400 font-bold block">Conectado via Groq Llama 3</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  onClick={handleClearHistory}
+                  title="Reiniciar chat"
+                  className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-rose-400 rounded-lg transition-colors text-xs flex items-center gap-1 font-bold"
+                >
+                  <Trash2 size={13} />
+                  <span className="text-[9px] font-black uppercase">Limpar</span>
+                </button>
+                <button 
+                  onClick={() => setIsChatOpen(false)}
+                  className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"
+                  title="Recolher"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Message Area */}
+            <div className="flex-1 p-4 overflow-y-auto bg-slate-50/50 space-y-3.5 scrollbar-thin" id="chat_scroll_area">
+              {chatMessages.map((msg, index) => (
+                <div 
+                  key={index} 
+                  className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                >
+                  <div className={`p-3 rounded-2xl text-[11px] leading-relaxed max-w-[85%] shadow-sm ${
+                    msg.role === 'user' 
+                      ? 'bg-indigo-600 text-white rounded-tr-none text-left' 
+                      : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none text-left'
+                  }`}>
+                    <p className="whitespace-pre-line font-medium">{msg.content}</p>
+                  </div>
+                  <span className="text-[9px] text-slate-400 mt-1 font-bold px-1 select-none uppercase tracking-wide">
+                    {msg.role === 'user' ? 'Você' : 'Assistente IA'}
+                  </span>
+                </div>
+              ))}
+
+              {/* Loader */}
+              {isChatLoading && (
+                <div className="flex flex-col items-start animate-pulse">
+                  <div className="bg-white border border-slate-200 p-3 rounded-2xl rounded-tl-none font-bold text-[10px] text-slate-500 flex items-center gap-1.5 shadow-sm">
+                    <span className="flex gap-1">
+                      <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                      <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                      <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                    </span>
+                    <span>IA pensando...</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Error banner */}
+              {chatError && (
+                <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl text-[10px] text-rose-600 font-semibold space-y-1 text-left">
+                  <p className="font-bold flex items-center gap-1 text-rose-700">
+                    <AlertTriangle size={12} /> Algo deu errado!
+                  </p>
+                  <p className="font-normal">{chatError}</p>
+                  <p className="text-[9px] text-rose-500 font-bold mt-1.5 border-t border-rose-100/50 pt-1 leading-relaxed">
+                    💡 Certifique-se de configurar a variável <code className="bg-rose-100 px-1 rounded font-bold">GROQ_API_KEY</code> no seu painel de Secrets nas Configurações do AI Studio para habilitar a IA em nuvem.
+                  </p>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Quick Prompts Panel */}
+            <div className="p-2 border-t border-slate-100 bg-slate-50 flex gap-1.5 overflow-x-auto whitespace-nowrap scrollbar-none select-none">
+              {[
+                "Como calcular juros simples?",
+                "Como funciona juro composto?",
+                "Como conectar o Supabase?",
+                "Como gerar o SQL DDL?",
+                "Como lançar novo devedor?"
+              ].map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => handleSendChatMessage(undefined, q)}
+                  className="px-2.5 py-1 bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-500 rounded-full text-[10px] font-bold shadow-sm transition-all focus:outline-none cursor-pointer"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+
+            {/* Input area */}
+            <form onSubmit={handleSendChatMessage} className="p-3 bg-white border-t border-slate-100 flex gap-2">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Pergunte sobre o GestãoCred ou fórmulas..."
+                disabled={isChatLoading}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-800 placeholder:text-slate-400"
+              />
+              <button
+                type="submit"
+                disabled={isChatLoading || !chatInput.trim()}
+                className="px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center transition-all shadow disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none cursor-pointer"
+              >
+                <Send size={14} />
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Floating Bubble Button */}
+        <button
+          onClick={() => setIsChatOpen(!isChatOpen)}
+          className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-2xl cursor-pointer hover:scale-105 active:scale-95 transition-all relative border-none ${
+            isChatOpen ? 'bg-slate-900' : 'bg-gradient-to-tr from-indigo-600 to-indigo-500'
+          }`}
+          title="Tirar Dúvidas com IA (Groq)"
+          id="ai_chat_bubble_trigger"
+        >
+          {isChatOpen ? (
+            <X size={20} />
+          ) : (
+            <>
+              <MessageSquare size={20} />
+              <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500 border border-white text-[8px] font-black items-center justify-center text-slate-950 font-sans shadow-sm">IA</span>
+              </span>
+            </>
+          )}
+        </button>
+      </div>
 
       {/* FOOTER */}
       <footer className="w-full bg-white border-t border-slate-200 py-4 text-center mt-auto text-[11px] text-slate-400">
