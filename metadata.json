@@ -1,0 +1,6 @@
+{
+  "name": "Gestão de Empréstimos",
+  "description": "Aplicativo completo para controle e gestão financeira de empréstimos, cobrança de parcelas e devedores com sincronização opcional com Supabase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
