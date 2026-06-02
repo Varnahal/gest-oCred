@@ -1,1 +1,69 @@
 @import "tailwindcss";
+
+@theme {
+  /* Redefining white to be deep space dark and grays/slates to be light text/accent borders */
+  --color-white: #0b0f19;
+  --color-slate-50: #05070c;
+  --color-slate-100: #131a2e;
+  --color-slate-150: #1b2541;
+  --color-slate-200: #1e294b;
+  --color-slate-250: #293766;
+  --color-slate-300: #3b4d82;
+  --color-slate-400: #6b7fab;
+  
+  --color-slate-500: #94a3b8;
+  --color-slate-600: #cbd5e1;
+  --color-slate-700: #e2e8f0;
+  --color-slate-800: #f1f5f9;
+  --color-slate-900: #f8fafc;
+  --color-slate-950: #ffffff;
+  
+  --color-indigo-50: #13172e;
+  --color-indigo-100: #1e254b;
+  --color-indigo-200: #2b356c;
+  --color-indigo-950: #f8fafc;
+  
+  --color-emerald-50: #061e14;
+  --color-emerald-100: #0b3322;
+  --color-emerald-600: #34d399;
+  --color-emerald-700: #a7f3d0;
+  
+  --color-amber-50: #241a05;
+  --color-amber-100: #42300b;
+  --color-amber-700: #fbbf24;
+  
+  --color-red-50: #240a0a;
+  --color-red-100: #441515;
+  --color-red-200: #6e1c1c;
+  --color-red-600: #f87171;
+  --color-red-800: #fca5a5;
+  --color-red-950: #fef2f2;
+
+  --color-rose-50: #240a0c;
+  --color-rose-100: #421013;
+  --color-rose-500: #f43f5e;
+  --color-rose-600: #e11d48;
+  --color-rose-700: #be123c;
+}
+
+body {
+  background-color: var(--color-slate-50);
+  color: var(--color-slate-800);
+}
+
+/* Scrollbar adjustment for dark mode */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #05070c;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e294b;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #293766;
+}
+
